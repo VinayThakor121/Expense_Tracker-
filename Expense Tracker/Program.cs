@@ -1,4 +1,6 @@
 using Expense_Tracker.Models;
+using Expense_Tracker.Services;
+using Expense_Tracker.Settings;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +14,11 @@ var serverVersion = new MySqlServerVersion(new Version(8, 0, 21));
 // Add DbContext with MySql Provider -> DI
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseMySql(connectionString, serverVersion));
+builder.Services.Configure<GeminiApiSettings>(builder.Configuration.GetSection("GeminiApi"));
+builder.Services.AddHttpClient<IAiSummaryService, AiSummaryService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
 var app = builder.Build();
 

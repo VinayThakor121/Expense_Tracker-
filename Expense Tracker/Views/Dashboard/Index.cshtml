@@ -1,3 +1,4 @@
+@model Expense_Tracker.ViewModels.DashboardViewModel
 @{
     ViewData["PageTitle"] = "Dashboard";
 }
@@ -7,7 +8,7 @@
             <div class="card-body">
                 <h5 class="card-title text-center">Income</h5>
                 <hr />
-                <h1 class="text-center">@ViewBag.TotalIncome</h1>
+                <h1 class="text-center">@Model.TotalIncome</h1>
             </div>
         </div>
     </div>
@@ -16,7 +17,7 @@
             <div class="card-body">
                 <h5 class="card-title text-center">Expense</h5>
                 <hr />
-                <h1 class="text-center">@ViewBag.TotalExpense</h1>
+                <h1 class="text-center">@Model.TotalExpense</h1>
             </div>
         </div>
     </div>
@@ -25,7 +26,7 @@
             <div class="card-body">
                 <h5 class="card-title text-center">Balance</h5>
                 <hr />
-                <h1 class="text-center">@ViewBag.Balance</h1>
+                <h1 class="text-center">@Model.Balance</h1>
             </div>
         </div>
     </div>
@@ -42,14 +43,14 @@
                 </tr>
             </thead>
             <tbody class="table-group-divider">
-                @foreach (var item in @ViewBag.RecentTransactions)
+                @foreach (var item in Model.RecentTransactions)
                 {
                     string symbol = "";
                     <tr>
-                        <td>@item.Category.TitleWithIcon</td>
-                        <td>@item.Date</td>
+                        <td>@item.Category?.TitleWithIcon</td>
+                        <td>@item.Date.ToString("dd MMM yyyy")</td>
                         <td>
-                            @if (@item.Category.Type == "Income")
+                            @if (item.Category?.Type == "Income")
                             {
                                 symbol = "+";
                             }
@@ -65,4 +66,103 @@
             </tbody>
         </table>
     </div>
+    <div class="col-md-5">
+        @Html.AntiForgeryToken()
+        <div class="card border-0 shadow-lg h-100" style="background-color: #161e27;">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">AI Monthly Expense Summary</h5>
+                    <button id="generateAiSummaryBtn" class="btn btn-primary btn-sm" type="button">
+                        Generate AI Summary
+                    </button>
+                </div>
+
+                <div id="aiSummaryLoading" class="text-center py-4 d-none">
+                    <div class="spinner-border text-info mb-2" role="status"></div>
+                    <p class="mb-0 text-light">Generating your personalized monthly summary...</p>
+                </div>
+
+                <div id="aiSummaryError" class="alert alert-danger d-none" role="alert"></div>
+
+                <div id="aiSummaryCard" class="d-none">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <span id="spendingRiskBadge" class="badge bg-success">Spending is healthy</span>
+                        <span id="expenseRatioBadge" class="badge bg-secondary"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <small class="text-uppercase text-secondary">Top spending category</small>
+                        <p id="topCategoryText" class="mb-0 fw-semibold"></p>
+                    </div>
+
+                    <div class="border rounded p-3" style="background-color: #11171e;">
+                        <small class="text-uppercase text-secondary">AI Insights</small>
+                        <p id="aiSummaryText" class="mb-0 mt-2" style="white-space: pre-line;"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const generateBtn = document.getElementById("generateAiSummaryBtn");
+            const loading = document.getElementById("aiSummaryLoading");
+            const errorBox = document.getElementById("aiSummaryError");
+            const summaryCard = document.getElementById("aiSummaryCard");
+            const summaryText = document.getElementById("aiSummaryText");
+            const topCategoryText = document.getElementById("topCategoryText");
+            const spendingRiskBadge = document.getElementById("spendingRiskBadge");
+            const expenseRatioBadge = document.getElementById("expenseRatioBadge");
+            const tokenField = document.querySelector("input[name='__RequestVerificationToken']");
+
+            const setLoading = (isLoading) => {
+                generateBtn.disabled = isLoading;
+                loading.classList.toggle("d-none", !isLoading);
+            };
+
+            generateBtn.addEventListener("click", async function () {
+                errorBox.classList.add("d-none");
+                summaryCard.classList.add("d-none");
+                setLoading(true);
+
+                try {
+                    const response = await fetch('@Url.Action("GenerateAiMonthlySummary", "Dashboard")', {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "RequestVerificationToken": tokenField ? tokenField.value : ""
+                        },
+                        body: JSON.stringify({})
+                    });
+
+                    const payload = await response.json();
+                    if (!response.ok) {
+                        throw new Error(payload.message || "Unable to generate AI summary right now.");
+                    }
+
+                    summaryText.textContent = payload.summary;
+                    topCategoryText.textContent = payload.highestSpendingCategory || "N/A";
+                    expenseRatioBadge.textContent = `Expense/Income: ${payload.expenseToIncomeRatio}%`;
+
+                    if (payload.isHighSpending) {
+                        spendingRiskBadge.textContent = "Warning: Spending is high";
+                        spendingRiskBadge.className = "badge bg-danger";
+                    } else {
+                        spendingRiskBadge.textContent = "Spending is healthy";
+                        spendingRiskBadge.className = "badge bg-success";
+                    }
+
+                    summaryCard.classList.remove("d-none");
+                } catch (error) {
+                    errorBox.textContent = error.message || "Something went wrong while generating your summary.";
+                    errorBox.classList.remove("d-none");
+                } finally {
+                    setLoading(false);
+                }
+            });
+        })();
+    </script>
+}
