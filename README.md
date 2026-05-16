@@ -60,7 +60,8 @@ Add your Gemini API key in `Expense Tracker/appsettings.json` (or `appsettings.D
 "GeminiApi": {
   "ApiKey": "YOUR_GEMINI_API_KEY",
   "Model": "gemini-1.5-flash",
-  "BaseUrl": "https://generativelanguage.googleapis.com"
+  "BaseUrl": "https://generativelanguage.googleapis.com",
+  "CurrencySymbol": "₹"
 }
 ```
 

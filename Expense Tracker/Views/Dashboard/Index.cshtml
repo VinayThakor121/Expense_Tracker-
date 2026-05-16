@@ -1,6 +1,7 @@
 @model Expense_Tracker.ViewModels.DashboardViewModel
 @{
     ViewData["PageTitle"] = "Dashboard";
+    const string dateDisplayFormat = "dd MMM yyyy";
 }
 <div class="row g-0">
     <div class="col-md-4">
@@ -48,7 +49,7 @@
                     string symbol = "";
                     <tr>
                         <td>@item.Category?.TitleWithIcon</td>
-                        <td>@item.Date.ToString("dd MMM yyyy")</td>
+                        <td>@item.Date.ToString(dateDisplayFormat)</td>
                         <td>
                             @if (item.Category?.Type == "Income")
                             {

@@ -1,21 +1,34 @@
 ﻿using Expense_Tracker.DTOs;
 using Expense_Tracker.Models;
 using Expense_Tracker.Services;
+using Expense_Tracker.Settings;
 using Expense_Tracker.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Expense_Tracker.Controllers
 {
     public class DashboardController : Controller
     {
+        private const string UncategorizedCategory = "Uncategorized";
+        private const decimal HighSpendingThresholdPercentage = 80m;
+
         private readonly ApplicationDbContext _context;
         private readonly IAiSummaryService _aiSummaryService;
+        private readonly GeminiApiSettings _geminiSettings;
+        private readonly ILogger<DashboardController> _logger;
 
-        public DashboardController(ApplicationDbContext context, IAiSummaryService aiSummaryService)
+        public DashboardController(
+            ApplicationDbContext context,
+            IAiSummaryService aiSummaryService,
+            IOptions<GeminiApiSettings> geminiOptions,
+            ILogger<DashboardController> logger)
         {
             _context = context;
             _aiSummaryService = aiSummaryService;
+            _geminiSettings = geminiOptions.Value;
+            _logger = logger;
         }
 
         public async Task<ActionResult> Index()
@@ -64,18 +77,18 @@ namespace Expense_Tracker.Controllers
                     .Where(t => t.Date >= monthStart && t.Date < monthEnd)
                     .ToListAsync(cancellationToken);
 
-                int totalIncome = monthlyTransactions
+                decimal totalIncome = monthlyTransactions
                     .Where(t => t.Category?.Type == "Income")
                     .Sum(t => t.Amount);
 
-                int totalExpenses = monthlyTransactions
+                decimal totalExpenses = monthlyTransactions
                     .Where(t => t.Category?.Type == "Expense")
                     .Sum(t => t.Amount);
 
-                int balance = totalIncome - totalExpenses;
+                decimal balance = totalIncome - totalExpenses;
                 var categoryBreakdown = monthlyTransactions
                     .Where(t => t.Category?.Type == "Expense")
-                    .GroupBy(t => string.IsNullOrWhiteSpace(t.Category!.Title) ? "Uncategorized" : t.Category.Title)
+                    .GroupBy(t => t.Category?.Title ?? UncategorizedCategory)
                     .Select(group => new ExpenseCategoryBreakdownDto
                     {
                         CategoryName = group.Key,
@@ -101,6 +114,7 @@ namespace Expense_Tracker.Controllers
                     Balance = balance,
                     HighestSpendingCategory = highestSpendingCategory,
                     CategoryBreakdown = categoryBreakdown,
+                    CurrencySymbol = _geminiSettings.CurrencySymbol,
                     MonthlyFinancialBehavior =
                         $"Spending-to-income ratio is {Math.Round(expenseToIncomeRatio, 2)}%. Balance is {(balance >= 0 ? "positive" : "negative")}."
                 };
@@ -112,20 +126,23 @@ namespace Expense_Tracker.Controllers
                     Summary = summary,
                     HighestSpendingCategory = highestSpendingCategory,
                     ExpenseToIncomeRatio = Math.Round(expenseToIncomeRatio, 2),
-                    IsHighSpending = expenseToIncomeRatio > 80 || balance < 0
+                    IsHighSpending = expenseToIncomeRatio > HighSpendingThresholdPercentage || balance < 0
                 });
             }
             catch (InvalidOperationException ex)
             {
+                _logger.LogWarning(ex, "AI monthly summary could not be generated due to configuration or response issues.");
                 return BadRequest(new { message = ex.Message });
             }
-            catch (HttpRequestException)
+            catch (HttpRequestException ex)
             {
+                _logger.LogError(ex, "Gemini API request failed while generating AI monthly summary.");
                 return StatusCode(StatusCodes.Status502BadGateway,
                     new { message = "Unable to generate AI summary right now. Please try again shortly." });
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "Unexpected error while generating AI monthly summary.");
                 return StatusCode(StatusCodes.Status500InternalServerError,
                     new { message = "An unexpected error occurred while generating your monthly summary." });
             }

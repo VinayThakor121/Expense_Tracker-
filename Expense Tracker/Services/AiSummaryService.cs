@@ -10,6 +10,7 @@ namespace Expense_Tracker.Services;
 
 public class AiSummaryService : IAiSummaryService
 {
+    private const int MaxOutputTokens = 400;
     private readonly HttpClient _httpClient;
     private readonly GeminiApiSettings _geminiApiSettings;
 
@@ -44,7 +45,7 @@ public class AiSummaryService : IAiSummaryService
             generationConfig = new
             {
                 temperature = 0.4,
-                maxOutputTokens = 400
+                maxOutputTokens = MaxOutputTokens
             }
         };
 
@@ -70,20 +71,21 @@ public class AiSummaryService : IAiSummaryService
 
     private static string BuildPrompt(MonthlyFinancialSummaryDto monthlySummary)
     {
+        var currency = string.IsNullOrWhiteSpace(monthlySummary.CurrencySymbol) ? "₹" : monthlySummary.CurrencySymbol;
         var breakdownLines = monthlySummary.CategoryBreakdown.Count == 0
             ? "- No expense categories recorded this month."
             : string.Join(Environment.NewLine,
                 monthlySummary.CategoryBreakdown.Select(x =>
-                    $"- {x.CategoryName}: ₹{x.Amount.ToString("N0", CultureInfo.InvariantCulture)} ({x.Percentage:F2}%)"));
+                    $"- {x.CategoryName}: {currency}{x.Amount.ToString("N0", CultureInfo.InvariantCulture)} ({x.Percentage:F2}%)"));
 
         return $"""
                 You are a professional personal finance assistant.
                 Use the financial data below to generate a concise, professional, and personalized monthly expense summary for the user.
 
                 Monthly Financial Data:
-                - Total income: ₹{monthlySummary.TotalIncome.ToString("N0", CultureInfo.InvariantCulture)}
-                - Total expenses: ₹{monthlySummary.TotalExpenses.ToString("N0", CultureInfo.InvariantCulture)}
-                - Remaining balance: ₹{monthlySummary.Balance.ToString("N0", CultureInfo.InvariantCulture)}
+                - Total income: {currency}{monthlySummary.TotalIncome.ToString("N0", CultureInfo.InvariantCulture)}
+                - Total expenses: {currency}{monthlySummary.TotalExpenses.ToString("N0", CultureInfo.InvariantCulture)}
+                - Remaining balance: {currency}{monthlySummary.Balance.ToString("N0", CultureInfo.InvariantCulture)}
                 - Top spending category: {monthlySummary.HighestSpendingCategory}
                 - Monthly behavior note: {monthlySummary.MonthlyFinancialBehavior}
                 - Category-wise expense breakdown:
